@@ -1,23 +1,34 @@
+# micrograd-np
 
-# micrograd
+A tiny **NumPy-based** Autograd engine for educational purposes. Implements backpropagation (reverse-mode autodiff) over a dynamically built DAG and a neural network library with a PyTorch-like API. Unlike the original scalar-only micrograd, this version uses **NumPy arrays** for efficient matrix operations and supports **scalars, vectors, and matrices** with full broadcasting support.
 
-![awww](puppy.jpg)
+### Key Features
 
-A tiny Autograd engine (with a bite! :)). Implements backpropagation (reverse-mode autodiff) over a dynamically built DAG and a small neural networks library on top of it with a PyTorch-like API. Both are tiny, with about 100 and 50 lines of code respectively. The DAG only operates over scalar values, so e.g. we chop up each neuron into all of its individual tiny adds and multiplies. However, this is enough to build up entire deep neural nets doing binary classification, as the demo notebook shows. Potentially useful for educational purposes.
+- 🔢 **NumPy-based**: Efficient matrix operations with broadcasting
+- 🎓 **Educational**: ~520 lines with extensive documentation explaining the math
+- 🔄 **Automatic Differentiation**: Backpropagation through complex computational graphs
+- 🧠 **Neural Networks**: Matrix-based Linear layers and MLPs with Xavier initialization
+- 📊 **Visualization**: Graphviz integration for computational graph visualization
+- ✅ **Tested**: Gradients verified against PyTorch
 
 ### Installation
 
 ```bash
-pip install micrograd
+# Using uv (recommended)
+uv sync
+
+# Or using pip
+pip install -r requirements.txt
 ```
 
-### Example usage
+### Quick Start
 
-Below is a slightly contrived example showing a number of possible supported operations:
+#### Basic Operations
 
 ```python
 from micrograd.engine import Value
 
+# Works with scalars
 a = Value(-4.0)
 b = Value(2.0)
 c = a + b
@@ -30,39 +41,159 @@ e = c - d
 f = e**2
 g = f / 2.0
 g += 10.0 / f
-print(f'{g.data:.4f}') # prints 24.7041, the outcome of this forward pass
+print(f'{g.data:.4f}')  # prints 24.7041
 g.backward()
-print(f'{a.grad:.4f}') # prints 138.8338, i.e. the numerical value of dg/da
-print(f'{b.grad:.4f}') # prints 645.5773, i.e. the numerical value of dg/db
+print(f'{a.grad:.4f}')  # prints 138.8338, i.e. dg/da
+print(f'{b.grad:.4f}')  # prints 645.5773, i.e. dg/db
 ```
 
-### Training a neural net
-
-The notebook `demo.ipynb` provides a full demo of training an 2-layer neural network (MLP) binary classifier. This is achieved by initializing a neural net from `micrograd.nn` module, implementing a simple svm "max-margin" binary classification loss and using SGD for optimization. As shown in the notebook, using a 2-layer neural net with two 16-node hidden layers we achieve the following decision boundary on the moon dataset:
-
-![2d neuron](moon_mlp.png)
-
-### Tracing / visualization
-
-For added convenience, the notebook `trace_graph.ipynb` produces graphviz visualizations. E.g. this one below is of a simple 2D neuron, arrived at by calling `draw_dot` on the code below, and it shows both the data (left number in each node) and the gradient (right number in each node).
+#### Matrix Operations
 
 ```python
-from micrograd import nn
-n = nn.Neuron(2)
-x = [Value(1.0), Value(-2.0)]
-y = n(x)
-dot = draw_dot(y)
+from micrograd.engine import Value
+import numpy as np
+
+# Matrix multiplication
+A = Value([[1, 2], [3, 4]])
+B = Value([[5, 6], [7, 8]])
+C = A @ B
+print(C.data)  # Matrix product
+
+# Broadcasting works automatically
+x = Value([[1, 2, 3], [4, 5, 6]])  # 2x3 matrix
+b = Value([1, 0, -1])               # 1x3 vector (broadcasts)
+y = x + b                           # Element-wise addition with broadcasting
+```
+
+### Training a Neural Network
+
+```python
+from micrograd.nn import MLP
+from micrograd.engine import Value
+import numpy as np
+
+# Create a 3-layer network: 3 inputs → 16 hidden → 16 hidden → 1 output
+model = MLP(nin=3, nouts=[16, 16, 1])
+
+# Prepare data (batch processing supported!)
+X_train = np.array([[1, 2, 3], [4, 5, 6]])  # 2 samples, 3 features
+y_train = np.array([[1.0], [2.0]])           # 2 targets
+
+# Training loop
+learning_rate = 0.01
+for epoch in range(100):
+    # Forward pass
+    X = Value(X_train)
+    y = Value(y_train)
+    predictions = model(X)
+
+    # Compute loss
+    loss = predictions.mse(y)
+
+    # Backward pass
+    model.zero_grad()      # Reset gradients
+    loss.backward()        # Compute gradients
+
+    # Update parameters (SGD)
+    for p in model.parameters():
+        p.data -= learning_rate * p.grad
+
+    if epoch % 10 == 0:
+        print(f"Epoch {epoch}, Loss: {loss.data:.4f}")
+```
+
+### Supported Operations
+
+**Arithmetic**: `+`, `-`, `*`, `/`, `**`, `@` (matrix multiplication)
+
+**Activations**:
+- `relu()` - Rectified Linear Unit
+- `sigmoid()` - Numerically stable sigmoid
+- `softmax(axis)` - Multi-class probability distribution
+
+**Loss Functions**:
+- `mse(target)` - Mean Squared Error
+
+**Aggregations**:
+- `sum(axis, keepdims)` - Sum along axis
+- `mean(axis, keepdims)` - Average along axis
+
+**Other**:
+- `.T` - Transpose
+- Broadcasting support for all operations
+
+### Visualization
+
+Visualize the computational graph using Graphviz:
+
+```python
+from micrograd.engine import Value
+from micrograd.utils import draw_dot
+
+x = Value(2.0, name='x')
+y = Value(-3.0, name='y')
+z = x * y + x
+z.name = 'z'
+z.backward()
+
+# Create visualization
+graph = draw_dot(z)
+graph.render('computation_graph')  # Saves as SVG
 ```
 
 ![2d neuron](gout.svg)
 
-### Running tests
+### Running Tests
 
-To run the unit tests you will have to install [PyTorch](https://pytorch.org/), which the tests use as a reference for verifying the correctness of the calculated gradients. Then simply:
+Tests compare gradients against PyTorch to verify correctness:
 
 ```bash
-python -m pytest
+# Using uv
+PYTHONPATH=. uv run pytest test/
+
+# Or using pytest directly
+PYTHONPATH=. pytest test/
 ```
+
+### Architecture
+
+**`engine.py`** (~520 lines) - Automatic differentiation engine
+- `Value` class wraps NumPy arrays and builds computational graphs
+- Implements forward and backward pass for all operations
+- Handles broadcasting correctly in gradients
+
+**`nn.py`** (~205 lines) - Neural network building blocks
+- `Module` - Base class with `parameters()` and `zero_grad()`
+- `Linear` - Fully-connected layer with Xavier initialization
+- `MLP` - Multi-layer perceptron (stack of Linear layers)
+
+**`utils.py`** (~172 lines) - Visualization utilities
+- `draw_dot()` - Creates Graphviz visualizations of computational graphs
+- `trace()` - Traverses and collects all nodes in the graph
+
+### Differences from Original Micrograd
+
+1. **NumPy-based**: Uses NumPy arrays instead of scalars
+2. **Matrix operations**: Supports `@` for matrix multiplication
+3. **Broadcasting**: Proper gradient handling for broadcasted operations
+4. **More activations**: Added sigmoid and softmax
+5. **Matrix-based layers**: Linear layers instead of scalar Neurons
+6. **Batch processing**: Process multiple samples simultaneously
+7. **Loss functions**: Built-in MSE loss
+
+### Educational Focus
+
+This codebase prioritizes **clarity over performance**:
+- Every backward pass has a docstring explaining the mathematics
+- Examples in docstrings show usage patterns
+- Comments explain *why*, not just *what*
+- Clean, readable code suitable for learning
+
+Perfect for understanding:
+- How automatic differentiation works
+- How neural networks compute gradients
+- The math behind backpropagation
+- Building ML frameworks from scratch
 
 ### License
 
