@@ -89,7 +89,7 @@ class Linear(Module):
             Output Value with shape (batch_size, nout)
         """
         # Linear transformation: x @ W + b
-        act = x @ self.W.T
+        act = x @ self.W
 
         if self.use_bias:
             act = act + self.b
